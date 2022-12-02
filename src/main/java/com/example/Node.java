@@ -67,7 +67,7 @@ public class Node extends AbstractBehavior<Node.NodeLifeCycle> {
 	private Behavior<NodeLifeCycle> startReceiveAllNodeReferences(ReceiveAllNodeReferences command) {
 		// getContext().getLog().info("Hello {}!", command.nodeMap);
 		this.nodeMap = command.nodeMap;
-		// fillNodeTriedTable();
+		fillNodeTriedTable();
 		System.out.println(this.nodeMap);
 		return this;
 	}
