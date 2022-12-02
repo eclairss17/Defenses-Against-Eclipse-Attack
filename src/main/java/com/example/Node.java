@@ -33,6 +33,13 @@ public class Node extends AbstractBehavior<Node.NodeLifeCycle> {
 		}
 	}
 
+	public static class CommandAddToTest implements NodeLifeCycle {
+		public ArrayList<Integer> gossipPeers;
+		public CommandAddToTest(ArrayList<Integer> gossipPeers){
+			this.gossipPeers = gossipPeers;
+		}
+	}
+
 	public static Behavior<NodeLifeCycle> create(int nodeId, Boolean isAttacker, Boolean online, Integer timeToLive, 
 										Set<Integer> triedPeers, Set<Integer> testedPeers) {
 		return Behaviors.setup(context -> new Node(context, nodeId, isAttacker, online, timeToLive, triedPeers, testedPeers));
@@ -53,7 +60,8 @@ public class Node extends AbstractBehavior<Node.NodeLifeCycle> {
 	public Receive<NodeLifeCycle> createReceive() {
 		return newReceiveBuilder()
 			.onMessage(ReceiveAllNodeReferences.class, this::startReceiveAllNodeReferences)
-			.onMessage(CommandAddToTried.class, this::addNodeToTried).build();
+			.onMessage(CommandAddToTried.class, this::addNodeToTried)
+			.onMessage(CommandAddToTest.class, this::addPeersToTest).build();
 	}
 
 	private Behavior<NodeLifeCycle> startReceiveAllNodeReferences(ReceiveAllNodeReferences command) {
@@ -64,6 +72,7 @@ public class Node extends AbstractBehavior<Node.NodeLifeCycle> {
 		return this;
 	}
 	private Behavior<NodeLifeCycle> addNodeToTried(CommandAddToTried command){
+		this.triedPeers.add(command.tellNodeToAddToTried);
 		return this;
 	}
 
@@ -81,7 +90,24 @@ public class Node extends AbstractBehavior<Node.NodeLifeCycle> {
 		for(int eachNode:this.triedPeers){
 			nodeMap.get(eachNode).tell(command);
 		}
-
+		gossipPeersToTest();
+	}
+	private void gossipPeersToTest(){
+		Random randomPeer = new Random();
+		int min = 4, max = 7;
+		int gossipPeerCount = randomPeer.nextInt(max-min)+min;
+		ArrayList<Integer> gossipPeers = new ArrayList<Integer>();
+		for(int i=0; i<gossipPeerCount; i++){
+			gossipPeers.add(randomPeer.nextInt(nodeMap.size()));
+		}
+		Node.CommandAddToTest command = new Node.CommandAddToTest(gossipPeers);
+		nodeMap.get(this.nodeId).tell(command);
+	}
+	private Behavior<NodeLifeCycle> addPeersToTest(CommandAddToTest command){
+		for(int eachNode: command.gossipPeers){
+			this.testedPeers.add(eachNode);
+		}
+		return this;
 	}
 
 }
