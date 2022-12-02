@@ -25,7 +25,7 @@ public class Node extends AbstractBehavior<Node.NodeLifeCycle> {
 			this.nodeMap = nodeMap;
 		}
 	}
-	public class CommandAddToTried implements NodeLifeCycle {
+	public static class CommandAddToTried implements NodeLifeCycle {
 		public int tellNodeToAddToTried;
 		
 		public CommandAddToTried(int tellNodeToAddToTried){
@@ -52,22 +52,19 @@ public class Node extends AbstractBehavior<Node.NodeLifeCycle> {
 	@Override
 	public Receive<NodeLifeCycle> createReceive() {
 		return newReceiveBuilder()
-			.onMessage(ReceiveAllNodeReferences.class, this::startReceiveAllNodeReferences).build();
+			.onMessage(ReceiveAllNodeReferences.class, this::startReceiveAllNodeReferences)
 			.onMessage(CommandAddToTried.class, this::addNodeToTried).build();
 	}
 
 	private Behavior<NodeLifeCycle> startReceiveAllNodeReferences(ReceiveAllNodeReferences command) {
 		// getContext().getLog().info("Hello {}!", command.nodeMap);
 		this.nodeMap = command.nodeMap;
-		//#NodeLifeCycleer-send-message
-		// command.replyTo.tell(new GreeterBot.Greeted(command.whom, getContext().getSelf()));
-		//#NodeLifeCycleer-send-message
-
-		fillNodeTriedTable();
+		// fillNodeTriedTable();
+		System.out.println(this.nodeMap);
 		return this;
 	}
 	private Behavior<NodeLifeCycle> addNodeToTried(CommandAddToTried command){
-		
+		return this;
 	}
 
 	private void fillNodeTriedTable(){
@@ -78,6 +75,7 @@ public class Node extends AbstractBehavior<Node.NodeLifeCycle> {
 		}
 		gossipNodeToTriedPeers();
 	}
+
 	private void gossipNodeToTriedPeers(){
 		Node.CommandAddToTried command = new Node.CommandAddToTried(nodeId);
 		for(int eachNode:this.triedPeers){

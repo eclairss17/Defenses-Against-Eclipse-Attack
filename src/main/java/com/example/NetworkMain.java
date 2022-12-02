@@ -7,6 +7,7 @@ import akka.actor.typed.javadsl.*;
 import java.util.Random;
 import java.util.HashSet;
 import java.util.Map;
+import java.util.HashMap;
 import java.util.Set;
 
 public class NetworkMain extends AbstractBehavior<NetworkMain.ReceivePeerInformation>{
@@ -15,9 +16,8 @@ public class NetworkMain extends AbstractBehavior<NetworkMain.ReceivePeerInforma
         public ReceivePeerInformation() {
         } 
     }
-
     
-    private Map<Integer, ActorRef<Node.NodeLifeCycle>> allNodes;
+    private Map<Integer, ActorRef<Node.NodeLifeCycle>> allNodes = new HashMap<>();
     Random attackerRandom = new Random();
     Random ttlRandom = new Random();
 
@@ -33,7 +33,7 @@ public class NetworkMain extends AbstractBehavior<NetworkMain.ReceivePeerInforma
             timeToLive = ttlRandom.nextInt(10000) + 10000;
             triedPeers = new HashSet<>();
             testedPeers = new HashSet<>();
-            allNodes.put(i, context.spawn(Node.create(i, isAttacker, true, timeToLive,triedPeers, testedPeers), "peer"));
+            allNodes.put(i, context.spawn(Node.create(i, isAttacker, true, timeToLive,triedPeers, testedPeers), "peer"+i));
         }
         for(int i =0; i < numberOfNodes; i++){
             Node.ReceiveAllNodeReferences command = new Node.ReceiveAllNodeReferences(allNodes);

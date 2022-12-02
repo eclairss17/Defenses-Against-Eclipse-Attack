@@ -13,17 +13,13 @@ public class P2PApplication {
         int numberOfNodes = Integer.parseInt(input.nextLine());  
 
         final ActorSystem<NetworkMain.ReceivePeerInformation> networkMain =
-								 ActorSystem.create(NetworkMain.create(numberOfNodes), "Hello Master");
+								 ActorSystem.create(NetworkMain.create(numberOfNodes), "System");
 
-        
+
+        System.out.println(">>> Press ENTER to exit <<<");
+		input.nextLine();
 		input.close();
-
-        try {
-			System.out.println(">>> Press ENTER to exit <<<");
-			System.in.read();
-        } catch (IOException ignored) {
-		} finally {
-			networkMain.terminate();
-		}
+		networkMain.terminate();
+		
     }
 }
