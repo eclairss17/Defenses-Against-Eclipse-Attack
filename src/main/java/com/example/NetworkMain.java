@@ -12,11 +12,10 @@ import java.util.Set;
 
 public class NetworkMain extends AbstractBehavior<NetworkMain.ReceivePeerInformation>{
     public static class ReceivePeerInformation{
-        
-        public ReceivePeerInformation() {
-        } 
+        public ReceivePeerInformation() {}
     }
     
+    public int numberOfNodes;
     private Map<Integer, ActorRef<Node.NodeLifeCycle>> allNodes = new HashMap<>();
     Random attackerRandom = new Random();
     Random ttlRandom = new Random();
@@ -24,6 +23,7 @@ public class NetworkMain extends AbstractBehavior<NetworkMain.ReceivePeerInforma
     private NetworkMain(ActorContext<ReceivePeerInformation> context, Integer numberOfNodes) {
         super(context);
         //#create-actors
+        this.numberOfNodes = numberOfNodes;
         Boolean isAttacker = false;
         Integer timeToLive;
         Set<Integer> triedPeers;
@@ -47,10 +47,14 @@ public class NetworkMain extends AbstractBehavior<NetworkMain.ReceivePeerInforma
 
     @Override
     public Receive<ReceivePeerInformation> createReceive() {
-        return newReceiveBuilder().onMessage(ReceivePeerInformation.class, this::doSomething).build();
+        return newReceiveBuilder().onMessage(ReceivePeerInformation.class, this::startSimulate).build();
     }
 
-    private Behavior<ReceivePeerInformation> doSomething(ReceivePeerInformation info) { 
+    private Behavior<ReceivePeerInformation> startSimulate(ReceivePeerInformation info) {
+        for(int i=0; i < this.numberOfNodes; i++){
+            Node.BeginSimulate command = new Node.BeginSimulate();
+            allNodes.get(i).tell(command);
+        }
         return this;
     }
 }
