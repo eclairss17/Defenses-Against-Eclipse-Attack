@@ -1,13 +1,17 @@
 package com.example;
 
-import akka.actor.typed.ActorRef;
-import akka.actor.typed.Behavior;
-import akka.actor.typed.javadsl.*;
+import akka.NotUsed;
+import akka.actor.AbstractActor;
+import akka.actor.ActorRef;
+import akka.dispatch.OnComplete;
+import akka.pattern.Patterns;
+import scala.concurrent.Future;
 
+import java.time.Duration;
 import java.util.*;
 
 // #NodeLifeCycleer
-public class Node extends AbstractBehavior<Node.NodeLifeCycle> {
+public class Node extends AbstractActor {
 
 	public int nodeId;
 	public Boolean isAttacker;
@@ -15,15 +19,16 @@ public class Node extends AbstractBehavior<Node.NodeLifeCycle> {
 	public Integer timeToLive;
 	public Set<Integer> triedPeers;
 	public Set<Integer> testedPeers;
-	public Map<Integer, ActorRef<Node.NodeLifeCycle>> nodeMap = null;
+	public Map<Integer, ActorRef> nodeMap = null;
 	public Set<Integer> requestSet;
 	public Random random = new Random();
+	int connectionTimeout = 5000;
 
 	public interface NodeLifeCycle{}
 
-	public static class ReceiveAllNodeReferences implements NodeLifeCycle{
-		private Map<Integer, ActorRef<Node.NodeLifeCycle>> nodeMap;
-		public ReceiveAllNodeReferences(Map<Integer, ActorRef<Node.NodeLifeCycle>> nodeMap){
+	public static class ReceiveAllNodeReferences implements NodeLifeCycle {
+		private Map<Integer, ActorRef> nodeMap;
+		public ReceiveAllNodeReferences(Map<Integer, ActorRef> nodeMap){
 			this.nodeMap = nodeMap;
 		}
 	}
@@ -45,23 +50,24 @@ public class Node extends AbstractBehavior<Node.NodeLifeCycle> {
 	public static class BeginSimulate implements NodeLifeCycle{}
 
 	public static class ConnectionRequest implements NodeLifeCycle{
-		public int connectionRequestFrom;
+		// public int connectionRequestFrom;
 		public ArrayList<Integer> gossipPeers;
-		ConnectionRequest(int connectionRequestFrom, ArrayList<Integer> gossipPeers ){
-			this.connectionRequestFrom = connectionRequestFrom;
+		Integer source;
+		ConnectionRequest(ArrayList<Integer> gossipPeers, Integer replyTo){
 			this.gossipPeers = gossipPeers;
+			this.source = replyTo;
 		}
 	}
 
 
-	public static Behavior<NodeLifeCycle> create(int nodeId, Boolean isAttacker, Boolean online, Integer timeToLive, 
-										Set<Integer> triedPeers, Set<Integer> testedPeers) {
-		return Behaviors.setup(context -> new Node(context, nodeId, isAttacker, online, timeToLive, triedPeers, testedPeers));
-	}
+	// public static Behavior<NodeLifeCycle> create(int nodeId, Boolean isAttacker, Boolean online, Integer timeToLive, 
+	// 									Set<Integer> triedPeers, Set<Integer> testedPeers) {
+	// 	return Behaviors.setup(context -> new Node(context, nodeId, isAttacker, online, timeToLive, triedPeers, testedPeers));
+	// }
 
-	private Node(ActorContext<NodeLifeCycle> context, int nodeId, Boolean isAttacker, Boolean online, Integer timeToLive, 
+	private Node(int nodeId, Boolean isAttacker, Boolean online, Integer timeToLive, 
 					Set<Integer> triedPeers, Set<Integer> testedPeers) {
-		super(context);
+		// super(context);
 		this.nodeId = nodeId;
 		this.isAttacker = isAttacker;
 		this.online = online;
@@ -71,27 +77,27 @@ public class Node extends AbstractBehavior<Node.NodeLifeCycle> {
 	}
 
 	@Override
-	public Receive<NodeLifeCycle> createReceive() {
-		return newReceiveBuilder()
-			.onMessage(ReceiveAllNodeReferences.class, this::startReceiveAllNodeReferences)
-			.onMessage(CommandAddToTried.class, this::addNodeToTried)
-			.onMessage(CommandAddToTest.class, this::addPeersToTest)
-			.onMessage(BeginSimulate.class, this::simulate)
-			.onMessage(ConnectionRequest.class, this::uponConnectionRequest).build();
+	public Receive createReceive() {
+		return receiveBuilder()
+			.match(ReceiveAllNodeReferences.class, this::startReceiveAllNodeReferences)
+			.match(CommandAddToTried.class, this::addNodeToTried)
+			.match(CommandAddToTest.class, this::addPeersToTest)
+			.match(BeginSimulate.class, this::simulate)
+			.match(ConnectionRequest.class, this::uponConnectionRequest).build();
 
 	}
 
-	private Behavior<NodeLifeCycle> startReceiveAllNodeReferences(ReceiveAllNodeReferences command) {
+	private void startReceiveAllNodeReferences(ReceiveAllNodeReferences command) {
 		// getContext().getLog().info("Hello {}!", command.nodeMap);
 		this.nodeMap = command.nodeMap;
 		fillNodeTriedTable();
 		System.out.println(this.nodeMap);
-		return this;
+		// return this;
 	}
-	private Behavior<NodeLifeCycle> addNodeToTried(CommandAddToTried command){
+	private void addNodeToTried(CommandAddToTried command){
 		if(!this.triedPeers.contains(command.tellNodeToAddToTried))
 			this.triedPeers.add(command.tellNodeToAddToTried);
-		return this;
+		// return this;
 	}
 
 	private void fillNodeTriedTable(){
@@ -106,7 +112,7 @@ public class Node extends AbstractBehavior<Node.NodeLifeCycle> {
 	private void gossipNodeToTriedPeers(){
 		Node.CommandAddToTried command = new Node.CommandAddToTried(nodeId);
 		for(int eachNode:this.triedPeers){
-			nodeMap.get(eachNode).tell(command);
+			nodeMap.get(eachNode).tell(command,getSelf());
 		}
 		gossipPeersToTest();
 	}
@@ -122,21 +128,21 @@ public class Node extends AbstractBehavior<Node.NodeLifeCycle> {
 			}
 		
 			Node.CommandAddToTest command = new Node.CommandAddToTest(gossipPeers);
-			nodeMap.get(eachNode).tell(command);
+			nodeMap.get(eachNode).tell(command, getSelf());
 		}
 	}
-	private Behavior<NodeLifeCycle> addPeersToTest(CommandAddToTest command){
+	private void addPeersToTest(CommandAddToTest command){
 		for(int eachNode: command.gossipPeers){
 			if(eachNode!= this.nodeId && !this.triedPeers.contains(eachNode))
 				this.testedPeers.add(eachNode);
 				//
 		}
-		return this;
+		// return this;
 	}
 
-	public Behavior<NodeLifeCycle> simulate(BeginSimulate command){
+	public void simulate(BeginSimulate command){
 		conectionRequest();
-		return this;
+		// return this;
 	}
 
 	private void conectionRequest(){
@@ -147,30 +153,41 @@ public class Node extends AbstractBehavior<Node.NodeLifeCycle> {
 			//take random elements from the tried table
 			gossipPeers.add(this.triedPeers.stream().skip(this.random.nextInt(this.triedPeers.size())).findFirst().orElse(null));
 		}
-		Node.ConnectionRequest command = new Node.ConnectionRequest(this.nodeId,gossipPeers);
+		NodeLifeCycle command = new ConnectionRequest(gossipPeers, this.nodeId);
 		int randomPeer = this.testedPeers.stream().skip(this.random.nextInt(this.testedPeers.size())).findFirst().orElse(null);
-		// nodeMap.get(randomPeer).ask(command);
+		
+		Future<Object> f = Patterns.ask(nodeMap.get(randomPeer), command, connectionTimeout);
+
+		System.out.println("asking...");
+        f.onComplete(new OnComplete<Object>(){
+            public void onComplete(Throwable t, Object result){
+              System.out.println(((ArrayList<Integer>)result));
+            }
+        }, getContext().getSystem().dispatcher());
+		// Flow<ArrayList<Integer>, NodeLifeCycle, NotUsed> askFlow = 
+		// 			ActorFlow.ask(nodeMap.get(randomPeer), connectionTimeout, ConnectionRequest::new);
+		
+		// Source.repeat(command).via(askFlow).map(reply -> reply.gossipPeers).runWith(Sink.seq(), getContext().getSystem());
 
 	}
 
-	public Behavior<NodeLifeCycle> uponConnectionRequest(ConnectionRequest command){
+	public void uponConnectionRequest(ConnectionRequest command){
 
-		if(requestSet.contains(command.connectionRequestFrom)){
+		if(requestSet.contains(command.source)){
 			for(int eachNode:command.gossipPeers) {
 				if(eachNode!= this.nodeId && !this.triedPeers.contains(eachNode))
 					this.testedPeers.add(eachNode);
 			}
-			this.triedPeers.add(command.connectionRequestFrom);
+			this.triedPeers.add(command.source);
+			this.testedPeers.remove(command.source);
 		}
 		else{
 			//repond no , //Create class behaviour answerconnectionrequest -> //update request map //restart simulation
 			if(!this.testedPeers.contains(command.connectionRequestFrom))
 				this.testedPeers.add(command.connectionRequestFrom);
 		}
-		return this;
+		// return this;
 	}
-
-
 
 }
 
