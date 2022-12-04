@@ -1,9 +1,10 @@
 package com.example;
 
-import akka.actor.typed.ActorSystem;
+import akka.actor.ActorRef;
+import akka.actor.ActorSystem;
+import akka.actor.Props;
 
-import java.util.Scanner; 
-import java.io.IOException;
+import java.util.Scanner;
 
 public class P2PApplication {
 	public static void main(String[] args) {
@@ -12,14 +13,17 @@ public class P2PApplication {
         System.out.println("Enter the number of nodes");
         int numberOfNodes = Integer.parseInt(input.nextLine());  
 
-        final ActorSystem<NetworkMain.ReceivePeerInformation> networkMain =
-								 ActorSystem.create(NetworkMain.create(numberOfNodes), "System");
+        final ActorSystem system = ActorSystem.create();
+		ActorRef mainRef = system.actorOf(Props.create(NetworkMain.class, numberOfNodes));
+
+		// final ActorSystem<DefenseNetworkMain.ReceivePeerInformation> defenseNetworkMain =
+		// 						 ActorSystem.create(DefenseNetworkMain.create(numberOfNodes), "DefenseSystem");
 
 
         System.out.println(">>> Press ENTER to exit <<<");
 		input.nextLine();
 		input.close();
-		networkMain.terminate();
-		
+		system.terminate();
+		// defenseNetworkMain.terminate();
     }
 }

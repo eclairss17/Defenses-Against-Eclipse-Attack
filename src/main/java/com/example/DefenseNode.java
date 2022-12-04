@@ -1,17 +1,15 @@
 package com.example;
 
-import akka.NotUsed;
 import akka.actor.AbstractActor;
 import akka.actor.ActorRef;
 import akka.dispatch.OnComplete;
 import akka.pattern.Patterns;
 import scala.concurrent.Future;
 
-import java.time.Duration;
 import java.util.*;
 
 // #NodeLifeCycleer
-public class Node extends AbstractActor {
+public class DefenseNode extends AbstractActor {
 
 	public int nodeId;
 	public Boolean isAttacker;
@@ -22,12 +20,25 @@ public class Node extends AbstractActor {
 	public Set<Integer> testedPeers;
 	public Map<Integer, ActorRef> nodeMap = null;
 	public Set<Integer> requestSet;
+	public Map<Integer, TreeNode> masterMap;
+	public Map<Integer, TreeNode> toplevelMap;
 	public Random random = new Random();
 	int connectionTimeout = 5000;
 
+	static class TreeNode{
+		int nodeId;
+		int count;
+		Set<TreeNode> children;
+		public TreeNode(int nodeId, int count, Set<TreeNode> children){
+			this.nodeId = nodeId;
+			this.count = count;
+			this.children = children;
+		}
+	};
+
 	public interface NodeLifeCycle{}
 
-	public static class ReceiveAllNodeReferences implements NodeLifeCycle {
+	public static class ReceiveAllNodeReferences implements NodeLifeCycle{
 		private Map<Integer, ActorRef> nodeMap;
 		public ReceiveAllNodeReferences(Map<Integer, ActorRef> nodeMap){
 			this.nodeMap = nodeMap;
@@ -42,8 +53,10 @@ public class Node extends AbstractActor {
 	}
 
 	public static class CommandAddToTest implements NodeLifeCycle {
+		int peersFromNodeId;
 		public ArrayList<Integer> gossipPeers;
-		public CommandAddToTest(ArrayList<Integer> gossipPeers){
+		public CommandAddToTest(int peersFromNodeId, ArrayList<Integer> gossipPeers){
+			this.peersFromNodeId = peersFromNodeId;
 			this.gossipPeers = gossipPeers;
 		}
 	}
@@ -51,31 +64,29 @@ public class Node extends AbstractActor {
 	public static class BeginSimulate implements NodeLifeCycle{}
 
 	public static class ConnectionRequest implements NodeLifeCycle{
-		// public int connectionRequestFrom;
+		public int connectionRequestFrom;
 		public ArrayList<Integer> gossipPeers;
-		Integer source;
 		ConnectionRequest(ArrayList<Integer> gossipPeers, Integer replyTo){
+			this.connectionRequestFrom = replyTo;
 			this.gossipPeers = gossipPeers;
-			this.source = replyTo;
 		}
 	}
 
 	public static class ConnectionResponse implements NodeLifeCycle{
 		public ArrayList<Integer> gossipPeers;
-		Integer source;
+		Integer connectionRequestFrom;
 		ConnectionResponse(ArrayList<Integer> gossipPeers, Integer replyTo){
 			this.gossipPeers = gossipPeers;
-			this.source = replyTo;
+			this.connectionRequestFrom = replyTo;
 		}
 	}
 
-
 	// public static Behavior<NodeLifeCycle> create(int nodeId, Boolean isAttacker, Boolean online, Integer timeToLive, 
 	// 									Set<Integer> triedPeers, Set<Integer> testedPeers) {
-	// 	return Behaviors.setup(context -> new Node(context, nodeId, isAttacker, online, timeToLive, triedPeers, testedPeers));
+	// 	return Behaviors.setup(context -> new DefenseNode(context, nodeId, isAttacker, online, timeToLive, triedPeers, testedPeers));
 	// }
 
-	private Node(int nodeId, Boolean isAttacker, Boolean online, Integer timeToLive, 
+	private DefenseNode(int nodeId, Boolean isAttacker, Boolean online, Integer timeToLive, 
 					Set<Integer> triedPeers, Set<Integer> testedPeers) {
 		// super(context);
 		this.nodeId = nodeId;
@@ -114,15 +125,21 @@ public class Node extends AbstractActor {
 		// Random triedPeersCount = new Random();
 		int triedPeerCount = this.random.nextInt(10);
 		for(int i =0; i < triedPeerCount; i++){
-			this.triedPeers.add(this.random.nextInt(nodeMap.size()));
+			int nodeId = this.random.nextInt(nodeMap.size());
+			this.triedPeers.add(nodeId);
+			TreeNode newNode = new TreeNode(nodeId,0,new HashSet<TreeNode>());
+			masterMap.put(nodeId, newNode);
+			toplevelMap.put(nodeId, newNode);
+			//create tree map master{node id, count of active children, set of children}
+			//create TreeNode of tried peer and add to top level treenode map
 		}
 		gossipNodeToTriedPeers();
 	}
 
 	private void gossipNodeToTriedPeers(){
-		Node.CommandAddToTried command = new Node.CommandAddToTried(nodeId);
+		DefenseNode.CommandAddToTried command = new DefenseNode.CommandAddToTried(nodeId);
 		for(int eachNode:this.triedPeers){
-			nodeMap.get(eachNode).tell(command,getSelf());
+			nodeMap.get(eachNode).tell(command, getSelf());
 		}
 		gossipPeersToTest();
 	}
@@ -137,15 +154,18 @@ public class Node extends AbstractActor {
 				gossipPeers.add(this.triedPeers.stream().skip(this.random.nextInt(this.triedPeers.size())).findFirst().orElse(null));
 			}
 		
-			Node.CommandAddToTest command = new Node.CommandAddToTest(gossipPeers);
+			DefenseNode.CommandAddToTest command = new DefenseNode.CommandAddToTest(this.nodeId, gossipPeers);
 			nodeMap.get(eachNode).tell(command, getSelf());
 		}
 	}
 	private void addPeersToTest(CommandAddToTest command){
 		for(int eachNode: command.gossipPeers){
-			if(eachNode!= this.nodeId && !this.triedPeers.contains(eachNode))
+			if(eachNode!= this.nodeId && !this.triedPeers.contains(eachNode) && !masterMap.containsKey(eachNode) )//check if the child already exists in master treenode map
 				this.testedPeers.add(eachNode);
-				//
+				TreeNode newNode = new TreeNode(eachNode,0,new HashSet<TreeNode>());
+				masterMap.put(eachNode, newNode);
+				masterMap.get(command.peersFromNodeId).children.add(newNode);
+				//create treenode for this node, add this to the children set of the one sending the command
 		}
 		// return this;
 	}
@@ -178,18 +198,22 @@ public class Node extends AbstractActor {
             public void onComplete(Throwable t, Object result){
 				ConnectionResponse response = (ConnectionResponse)result;
 				if(response.gossipPeers != null && !response.gossipPeers.isEmpty()){
-					for(int eachNode:command.gossipPeers) {
-						if(eachNode!= nodeId && !triedPeers.contains(eachNode))
+					for(int eachNode: response.gossipPeers){
+						if(eachNode!= nodeId && !triedPeers.contains(eachNode) && !masterMap.containsKey(eachNode) )//check if the child already exists in master treenode map
 							testedPeers.add(eachNode);
+							TreeNode newNode = new TreeNode(eachNode,0,new HashSet<TreeNode>());
+							masterMap.put(eachNode, newNode);
+							masterMap.get(response.connectionRequestFrom).children.add(newNode);
+							//create treenode for this node, add this to the children set of the one sending the command
 					}
-					triedPeers.add(command.source);
-					testedPeers.remove(command.source);
+					triedPeers.add(command.connectionRequestFrom);
+					testedPeers.remove(command.connectionRequestFrom);
 					requestSet.clear();
-					System.out.println("connection made between " + nodeId + "and" + response.source);
+					System.out.println("connection made between " + nodeId + "and" + response.connectionRequestFrom);
 				}
 				else{
 					requestSet.add(randomPeer);
-					System.out.println("connection Rejected between " + nodeId + "and" + response.source);
+					System.out.println("connection Rejected between " + nodeId + "and" + response.connectionRequestFrom);
 				}
             }
         }, getContext().getSystem().dispatcher());
@@ -198,13 +222,22 @@ public class Node extends AbstractActor {
 
 	public void uponConnectionRequest(ConnectionRequest command){
 
-		if(requestSet.contains(command.source)){
-			for(int eachNode:command.gossipPeers) {
-				if(eachNode!= this.nodeId && !this.triedPeers.contains(eachNode))
+		if(requestSet.contains(command.connectionRequestFrom)){
+			// for(int eachNode:command.gossipPeers) {
+			// 	if(eachNode!= this.nodeId && !this.triedPeers.contains(eachNode))//check if the child already exists in master treenode map
+			// 		this.testedPeers.add(eachNode);
+			// 		//create treenode for this node, add this to the children set of the one sending the command
+			// }
+			for(int eachNode: command.gossipPeers){
+				if(eachNode!= this.nodeId && !this.triedPeers.contains(eachNode) && !masterMap.containsKey(eachNode) )//check if the child already exists in master treenode map
 					this.testedPeers.add(eachNode);
+					TreeNode newNode = new TreeNode(eachNode,0,new HashSet<TreeNode>());
+					masterMap.put(eachNode, newNode);
+					masterMap.get(command.connectionRequestFrom).children.add(newNode);
+					//create treenode for this node, add this to the children set of the one sending the command
 			}
-			this.triedPeers.add(command.source);
-			this.testedPeers.remove(command.source);
+			this.triedPeers.add(command.connectionRequestFrom);
+			this.testedPeers.remove(command.connectionRequestFrom);
 			requestSet.clear();
 
 			int min = 4, max = 7;
@@ -220,10 +253,11 @@ public class Node extends AbstractActor {
 		}
 		else{
 			//repond no , //Create class behaviour answerconnectionrequest -> //update request map //restart simulation
-			if(!this.testedPeers.contains(command.source))
-				this.testedPeers.add(command.source);
+			if(!this.testedPeers.contains(command.connectionRequestFrom))
+				this.testedPeers.add(command.connectionRequestFrom);
 			ConnectionResponse response = new ConnectionResponse(null, nodeId);
 			getSender().tell(response, getSelf());
+				
 		}
 		// return this;
 	}
