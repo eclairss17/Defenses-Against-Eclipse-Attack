@@ -7,7 +7,7 @@ import akka.actor.typed.javadsl.*;
 import java.util.Random;
 import java.util.HashSet;
 import java.util.Map;
-import java.time.Duration;
+// import java.time.Duration;
 import java.util.HashMap;
 import java.util.Set;
 
@@ -51,9 +51,18 @@ public class DefenseNetworkMain extends AbstractBehavior<DefenseNetworkMain.Rece
         return newReceiveBuilder().onMessage(ReceivePeerInformation.class, this::startSimulate).build();
     }
 
+    public static void pause(int ms) {
+        try {
+            Thread.sleep(ms);
+        } catch (InterruptedException e) {
+            System.err.format("IOException: %s%n", e);
+        }
+    }
+    
     private Behavior<ReceivePeerInformation> startSimulate(ReceivePeerInformation info) {
-        final Duration timeout = Duration.ofSeconds(5);
-        for(int i=0; i < this.numberOfNodes; i++){
+        // final Duration timeout = Duration.ofSeconds(5);
+        pause(9000);
+        for(int i=0; i < this.numberOfNodes; i++){  
             Node.BeginSimulate command = new Node.BeginSimulate();
             allNodes.get(i).tell(command);
         }
