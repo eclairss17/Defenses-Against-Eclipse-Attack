@@ -157,7 +157,9 @@ public class Node extends AbstractBehavior<Node.NodeLifeCycle> {
 			this.triedPeers.add(command.connectionRequestFrom);
 		}
 		else{
-			//repond no & add single node to test, //Create class behaviour answerconnectionrequest -> //update request map //restart simulation
+			//repond no , //Create class behaviour answerconnectionrequest -> //update request map //restart simulation
+			if(!this.testedPeers.contains(command.connectionRequestFrom))
+				this.testedPeers.add(command.connectionRequestFrom);
 		}
 		return this;
 	}
