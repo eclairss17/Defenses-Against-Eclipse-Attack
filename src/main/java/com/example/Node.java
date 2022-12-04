@@ -89,7 +89,8 @@ public class Node extends AbstractBehavior<Node.NodeLifeCycle> {
 		return this;
 	}
 	private Behavior<NodeLifeCycle> addNodeToTried(CommandAddToTried command){
-		this.triedPeers.add(command.tellNodeToAddToTried);
+		if(!this.triedPeers.contains(command.tellNodeToAddToTried))
+			this.triedPeers.add(command.tellNodeToAddToTried);
 		return this;
 	}
 
@@ -112,13 +113,17 @@ public class Node extends AbstractBehavior<Node.NodeLifeCycle> {
 	private void gossipPeersToTest(){
 		// Random randomPeer = new Random();
 		int min = 4, max = 7;
-		int gossipPeerCount = this.random.nextInt(max-min)+min;
 		ArrayList<Integer> gossipPeers = new ArrayList<Integer>();
-		for(int i=0; i<gossipPeerCount; i++){
-			gossipPeers.add(this.random.nextInt(nodeMap.size()));
+		for(int eachNode:this.triedPeers){
+			int gossipPeerCount = this.random.nextInt(max-min)+min;
+			gossipPeers.clear();
+			for(int i=0; i<gossipPeerCount; i++){
+				gossipPeers.add(this.random.nextInt(nodeMap.size()));
+			}
+		
+			Node.CommandAddToTest command = new Node.CommandAddToTest(gossipPeers);
+			nodeMap.get(eachNode).tell(command);
 		}
-		Node.CommandAddToTest command = new Node.CommandAddToTest(gossipPeers);
-		nodeMap.get(this.nodeId).tell(command);
 	}
 	private Behavior<NodeLifeCycle> addPeersToTest(CommandAddToTest command){
 		for(int eachNode: command.gossipPeers){
