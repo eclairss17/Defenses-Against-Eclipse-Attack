@@ -118,7 +118,7 @@ public class Node extends AbstractBehavior<Node.NodeLifeCycle> {
 			int gossipPeerCount = this.random.nextInt(max-min)+min;
 			gossipPeers.clear();
 			for(int i=0; i<gossipPeerCount; i++){
-				gossipPeers.add(this.random.nextInt(nodeMap.size()));
+				gossipPeers.add(this.triedPeers.stream().skip(this.random.nextInt(this.triedPeers.size())).findFirst().orElse(null));
 			}
 		
 			Node.CommandAddToTest command = new Node.CommandAddToTest(gossipPeers);
@@ -129,6 +129,7 @@ public class Node extends AbstractBehavior<Node.NodeLifeCycle> {
 		for(int eachNode: command.gossipPeers){
 			if(eachNode!= this.nodeId && !this.triedPeers.contains(eachNode))
 				this.testedPeers.add(eachNode);
+				//
 		}
 		return this;
 	}
@@ -144,7 +145,7 @@ public class Node extends AbstractBehavior<Node.NodeLifeCycle> {
 		ArrayList<Integer> gossipPeers = new ArrayList<Integer>();
 		for(int i=0; i<gossipPeerCount; i++){
 			//take random elements from the tried table
-			gossipPeers.add(this.testedPeers.stream().skip(this.random.nextInt(this.triedPeers.size())).findFirst().orElse(null));
+			gossipPeers.add(this.triedPeers.stream().skip(this.random.nextInt(this.triedPeers.size())).findFirst().orElse(null));
 		}
 		Node.ConnectionRequest command = new Node.ConnectionRequest(this.nodeId,gossipPeers);
 		int randomPeer = this.testedPeers.stream().skip(this.random.nextInt(this.testedPeers.size())).findFirst().orElse(null);
