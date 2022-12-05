@@ -16,6 +16,7 @@ public class Node extends AbstractActor {
 	public int nodeId;
 	public Boolean isAttacker;
 	public int attackerRange = 500;
+	public int victimNode = 501;
 	public Boolean online;
 	public Integer timeToLive;
 	public Set<Integer> triedPeers;
@@ -122,24 +123,34 @@ public class Node extends AbstractActor {
 	private void gossipNodeToTriedPeers(){
 		Node.CommandAddToTried command = new Node.CommandAddToTried(nodeId);
 		for(int eachNode:this.triedPeers){
-			nodeMap.get(eachNode).tell(command,getSelf());
+			nodeMap.get(eachNode).tell(command, getSelf());
 		}
 		gossipPeersToTest();
 	}
+
 	private void gossipPeersToTest(){
 		// Random randomPeer = new Random();
 		int min = 4, max = 7;
 		ArrayList<Integer> gossipPeers = new ArrayList<Integer>();
-		for(int eachNode:this.triedPeers){
-			int gossipPeerCount = this.random.nextInt(max-min)+min;
-			gossipPeers.clear();
-			for(int i=0; i<gossipPeerCount; i++){
-				gossipPeers.add(this.triedPeers.stream().skip(this.random.nextInt(this.triedPeers.size())).findFirst().orElse(null));
+		int gossipPeerCount = this.random.nextInt(max-min)+min;
+		// if(nodeId < attackerRange){
+		// 	for(int eachNode : this.triedPeers){
+		// 		for(int i=0; i<gossipPeerCount; i++){
+		// 			gossipPeers.add(this.random.nextInt(attackerRange));
+		// 		}
+		// 	}
+		// }
+		// else{
+			for(int eachNode:this.triedPeers){
+				gossipPeers.clear();
+				for(int i=0; i<gossipPeerCount; i++){
+					gossipPeers.add(this.triedPeers.stream().skip(this.random.nextInt(this.triedPeers.size())).findFirst().orElse(null));
+				}
+			
+				Node.CommandAddToTest command = new Node.CommandAddToTest(gossipPeers);
+				nodeMap.get(eachNode).tell(command, getSelf());
 			}
-		
-			Node.CommandAddToTest command = new Node.CommandAddToTest(gossipPeers);
-			nodeMap.get(eachNode).tell(command, getSelf());
-		}
+		// }
 	}
 	private void addPeersToTest(CommandAddToTest command){
 		for(int eachNode: command.gossipPeers){
@@ -164,12 +175,21 @@ public class Node extends AbstractActor {
 		int min = 4, max = 7;
 		int gossipPeerCount = this.random.nextInt(max-min)+min;
 		ArrayList<Integer> gossipPeers = new ArrayList<Integer>();
-		for(int i=0; i<gossipPeerCount; i++){
-			//take random elements from the tried table
-			gossipPeers.add(this.triedPeers.stream().skip(this.random.nextInt(this.triedPeers.size())).findFirst().orElse(null));
+		int randomPeer;
+		if(nodeId < attackerRange){
+			for(int i=0; i<gossipPeerCount; i++){
+				gossipPeers.add(this.random.nextInt(attackerRange));
+			}
+			randomPeer = this.victimNode;
+		}
+		else{
+			for(int i=0; i<gossipPeerCount; i++){
+				//take random elements from the tried table
+				gossipPeers.add(this.triedPeers.stream().skip(this.random.nextInt(this.triedPeers.size())).findFirst().orElse(null));
+			}
+			randomPeer = this.testedPeers.stream().skip(this.random.nextInt(this.testedPeers.size())).findFirst().orElse(null);
 		}
 		ConnectionRequest command = new ConnectionRequest(gossipPeers, this.nodeId);
-		int randomPeer = this.testedPeers.stream().skip(this.random.nextInt(this.testedPeers.size())).findFirst().orElse(null);
 		
 		Future<Object> f = Patterns.ask(nodeMap.get(randomPeer), command, connectionTimeout);
 
@@ -197,33 +217,53 @@ public class Node extends AbstractActor {
 	}
 
 	public void uponConnectionRequest(ConnectionRequest command){
-
-		if(requestSet.contains(command.source)){
+		if(nodeId < attackerRange && command.source == victimNode){
 			for(int eachNode:command.gossipPeers) {
 				if(eachNode!= this.nodeId && !this.triedPeers.contains(eachNode))
 					this.testedPeers.add(eachNode);
 			}
 			this.triedPeers.add(command.source);
-			this.testedPeers.remove(command.source);
+			if(testedPeers.contains(command.source))
+				this.testedPeers.remove(command.source);
 			requestSet.clear();
-
+			
 			int min = 4, max = 7;
 			int gossipPeerCount = this.random.nextInt(max-min)+min;
 			ArrayList<Integer> gossipPeers = new ArrayList<Integer>();
 			for(int i=0; i<gossipPeerCount; i++){
-				//take random elements from the tried table
-				gossipPeers.add(this.triedPeers.stream().skip(this.random.nextInt(this.triedPeers.size())).findFirst().orElse(null));
+				gossipPeers.add(this.random.nextInt(attackerRange));
 			}
-
 			ConnectionResponse response = new ConnectionResponse(gossipPeers, this.nodeId);
 			getSender().tell(response, getSelf());
 		}
 		else{
-			//repond no , //Create class behaviour answerconnectionrequest -> //update request map //restart simulation
-			if(!this.testedPeers.contains(command.source))
-				this.testedPeers.add(command.source);
-			ConnectionResponse response = new ConnectionResponse(null, nodeId);
-			getSender().tell(response, getSelf());
+			if(requestSet.contains(command.source)){
+				for(int eachNode:command.gossipPeers) {
+					if(eachNode!= this.nodeId && !this.triedPeers.contains(eachNode))
+						this.testedPeers.add(eachNode);
+				}
+				this.triedPeers.add(command.source);
+				this.testedPeers.remove(command.source);
+				requestSet.clear();
+
+				int min = 4, max = 7;
+				int gossipPeerCount = this.random.nextInt(max-min)+min;
+				ArrayList<Integer> gossipPeers = new ArrayList<Integer>();
+				for(int i=0; i<gossipPeerCount; i++){
+					//take random elements from the tried table
+					gossipPeers.add(this.triedPeers.stream().skip(this.random.nextInt(this.triedPeers.size())).findFirst().orElse(null));
+				}
+
+				ConnectionResponse response = new ConnectionResponse(gossipPeers, this.nodeId);
+				getSender().tell(response, getSelf());
+			}
+			else{
+				//repond no , //Create class behaviour answerconnectionrequest -> //update request map //restart simulation
+				if(!this.testedPeers.contains(command.source))
+					this.testedPeers.add(command.source);
+				ConnectionResponse response = new ConnectionResponse(null, nodeId);
+				getSender().tell(response, getSelf());
+			}
 		}
 		// return this;
 	}
@@ -235,7 +275,8 @@ public class Node extends AbstractActor {
 				count++;
 			}
 		}
-		return count == triedPeers.size();
+		if(nodeId == victimNode)System.out.println("count of attacker nodes in victim: " + count);
+		return count == triedPeers.size() && nodeId == victimNode;
 	}
 
 }

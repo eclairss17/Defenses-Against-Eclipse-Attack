@@ -15,7 +15,8 @@ public class P2PApplication {
 
         final ActorSystem system = ActorSystem.create();
 		ActorRef mainRef = system.actorOf(Props.create(NetworkMain.class, numberOfNodes));
-
+		mainRef.tell(new Node.BeginSimulate(), mainRef);
+		
 		// final ActorSystem<DefenseNetworkMain.ReceivePeerInformation> defenseNetworkMain =
 		// 						 ActorSystem.create(DefenseNetworkMain.create(numberOfNodes), "DefenseSystem");
 

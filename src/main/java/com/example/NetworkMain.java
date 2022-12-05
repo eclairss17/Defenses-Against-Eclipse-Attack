@@ -3,15 +3,13 @@ package com.example;
 import akka.actor.AbstractActor;
 import akka.actor.ActorRef;
 import akka.actor.Props;
-import akka.actor.typed.Behavior;
-import akka.actor.typed.javadsl.*;
 
 import java.util.Random;
 import java.util.HashSet;
 import java.util.Map;
-import java.time.Duration;
 import java.util.HashMap;
 import java.util.Set;
+import java.util.concurrent.TimeUnit;
 
 public class NetworkMain extends AbstractActor {
     public static class ReceivePeerInformation{
@@ -19,6 +17,7 @@ public class NetworkMain extends AbstractActor {
     }
     
     public int numberOfNodes;
+    public int attackerRange = 500;
     private Map<Integer, ActorRef> allNodes = new HashMap<>();
     Random attackerRandom = new Random();
     Random ttlRandom = new Random();
@@ -33,7 +32,7 @@ public class NetworkMain extends AbstractActor {
         Set<Integer> triedPeers;
         Set<Integer> testedPeers;
         for(int i = 0; i < numberOfNodes; i++){
-            isAttacker = attackerRandom.nextInt(2) == 0;
+            isAttacker = i < attackerRange;
             timeToLive = ttlRandom.nextInt(10000) + 10000;
             triedPeers = new HashSet<>();
             testedPeers = new HashSet<>();
@@ -44,6 +43,12 @@ public class NetworkMain extends AbstractActor {
             Node.ReceiveAllNodeReferences command = new Node.ReceiveAllNodeReferences(allNodes);
             allNodes.get(i).tell(command, getSelf());
         }
+        try {
+            Thread.sleep(5000);
+        } catch (InterruptedException e) {
+            e.printStackTrace();
+        }
+        System.out.println("initialized all nodes");
     }
 
     // public static Behavior<ReceivePeerInformation> create(Integer numberOfNodes) {
